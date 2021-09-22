@@ -14,14 +14,13 @@ use std::io::{prelude::Read, BufReader};
 // # Arguments
 //
 // * `reader` - A reader.
-fn read2<T>(reader: T) -> [u8; 2]
+fn read2<T>(reader: &mut T) -> [u8; 2]
 where
     T: Read,
 {
-    let mut buf = Vec::with_capacity(2);
-    let mut chunk = reader.take(2);
-    let _val = chunk.read_to_end(&mut buf);
-    buf.try_into().expect("Value cannot fit.")
+    let mut buf = [0_u8; 2];
+    let _nbytes = reader.read(&mut buf);
+    buf
 }
 
 // Read 4 bytes from a reader.
@@ -29,14 +28,13 @@ where
 // # Arguments
 //
 // * `reader` - A reader.
-fn read4<T>(reader: T) -> [u8; 4]
+fn read4<T>(reader: &mut T) -> [u8; 4]
 where
     T: Read,
 {
-    let mut buf = Vec::with_capacity(4);
-    let mut chunk = reader.take(4);
-    let _val = chunk.read_to_end(&mut buf);
-    buf.try_into().expect("Value cannot fit.")
+    let mut buf = [0_u8; 4];
+    let _nbytes = reader.read(&mut buf);
+    buf
 }
 
 // Read arbitrary number of bytes from a reader.
