@@ -94,6 +94,10 @@ impl Format {
     /// * `sampling_rate` - Sampling rate in the audio data.
     /// * `bits_per_sample` - Bits per sample in the audio data.
     ///
+    /// # Panics
+    ///
+    /// Can panic if the value cannot fit when performing type conversion.
+    ///
     /// # Example
     ///
     /// ```
@@ -110,18 +114,18 @@ impl Format {
         sampling_rate: u32,
         bits_per_sample: u16,
     ) -> Self {
-        let size: u32 = data.len().try_into().expect("Value cannot fit.");
+        let size: u32 = data.len().try_into().unwrap();
 
-        let riff_tag = "RIFF".as_bytes().try_into().expect("Value cannot fit.");
+        let riff_tag = "RIFF".as_bytes().try_into().unwrap();
         let total_size = (size + 36).to_le_bytes();
-        let wave_tag = "WAVE".as_bytes().try_into().expect("Value cannot fit.");
-        let fmt_chunk_tag = "fmt ".as_bytes().try_into().expect("Value cannot fit.");
+        let wave_tag = "WAVE".as_bytes().try_into().unwrap();
+        let fmt_chunk_tag = "fmt ".as_bytes().try_into().unwrap();
         let fmt_chunk_size = 16_u32.to_le_bytes();
         let fmt_code = 1_u16.to_le_bytes();
         let byte_rate = (sampling_rate * u32::from(num_channels) * u32::from(bits_per_sample) / 8)
             .to_le_bytes();
         let block_alignment = (num_channels * bits_per_sample / 8).to_le_bytes();
-        let data_tag = "data".as_bytes().try_into().expect("Value cannot fit.");
+        let data_tag = "data".as_bytes().try_into().unwrap();
         let data_size = size.to_le_bytes();
 
         Format {
@@ -148,14 +152,14 @@ impl Format {
     ///
     /// * `path` - A path to the WAV PCM file.
     ///
-    /// # Panics
-    ///
-    /// Can panic.
-    ///
     /// # Errors
     ///
     /// This function will return an error if `path` does not already exist.
     /// Other errors may also be returned according to `OpenOptions::open`.
+    ///
+    /// # Panics
+    ///
+    /// Can panic if the value cannot fit when performing type conversion.
     ///
     /// # Example
     ///
@@ -204,15 +208,15 @@ impl Format {
 
     /// `check` checks if the read file complies with WAVE PCM format.
     ///
-    /// # Panics
-    ///
-    /// Can panic if the value cannot fit when performing type conversion.
-    ///
     /// # Errors
     ///
     /// Returns [`Err`](https://docs.rs/core/*/core/result/enum.Result.html) if the slice is not
     /// UTF-8 with a description as to why the provided bytes are not UTF-8. The vector you moved
     /// in is also included.
+    ///
+    /// # Panics
+    ///
+    /// Can panic if the value cannot fit when performing type conversion.
     ///
     /// # Example
     ///
@@ -224,8 +228,8 @@ impl Format {
     /// }
     /// ```
     pub fn check(&self) -> Result<(), anyhow::Error> {
-        let num_u16 = |x: Vec<u8>| u16::from_le_bytes(x.try_into().expect("Value cannot fit."));
-        let num_u32 = |x: Vec<u8>| u32::from_le_bytes(x.try_into().expect("Value cannot fit."));
+        let num_u16 = |x: Vec<u8>| u16::from_le_bytes(x.try_into().unwrap());
+        let num_u32 = |x: Vec<u8>| u32::from_le_bytes(x.try_into().unwrap());
         let str_4u8 = |x: Vec<u8>| std::string::String::from_utf8(x);
 
         let riff_tag = str_4u8(self.riff_tag.to_vec())?;
