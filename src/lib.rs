@@ -1,4 +1,4 @@
-//! WAVE PCM file format encoder and decoder.
+//! Fast WAVE PCM file format encoder and decoder.
 //!
 //! WAVE PCM is a library for fast encoding and decoding of WAV PCM format files.
 //! As the name suggests, the library only supports the PCM version of WAVE format specification.
@@ -46,12 +46,12 @@ where
 // # Panics
 //
 // Can panic if the value cannot fit when performing type conversion.
-fn readn<T>(reader: T, nbytes: u64) -> Vec<u8>
+fn readn<T>(reader: T, nbytes: u32) -> Vec<u8>
 where
     T: Read,
 {
     let mut buf = Vec::with_capacity(nbytes.try_into().unwrap());
-    let mut chunk = reader.take(nbytes);
+    let mut chunk = reader.take(u64::from(nbytes));
     let _val = chunk.read_to_end(&mut buf);
     buf
 }
@@ -105,11 +105,13 @@ impl Format {
     /// # Example
     ///
     /// ```
+    /// use wavepcm::Format;
+    ///
     /// let data = vec![1u8; 16];
     /// let num_channels = 1;
     /// let sampling_rate = 16_000;
     /// let bits_per_sample = 16;
-    /// let encoding = wavepcm::Format::encode(data, num_channels, sampling_rate, bits_per_sample);
+    /// let encoding = Format::encode(data, num_channels, sampling_rate, bits_per_sample);
     /// ```
     #[must_use]
     pub fn encode(
@@ -168,8 +170,10 @@ impl Format {
     /// # Example
     ///
     /// ```
+    /// use wavepcm::Format;
+    ///
     /// fn main() -> Result<(), anyhow::Error> {
-    ///     let decoding = wavepcm::Format::decode("sample.wav")?;
+    ///     let decoding = Format::decode("sample.wav")?;
     ///     Ok(())
     /// }
     /// ```
@@ -190,7 +194,7 @@ impl Format {
         let bits_per_sample = read2(&mut bufr);
         let data_tag = read4(&mut bufr);
         let data_size = read4(&mut bufr);
-        let data = readn(&mut bufr, u32::from_le_bytes(data_size).into());
+        let data = readn(&mut bufr, u32::from_le_bytes(data_size));
 
         Ok(Format {
             riff_tag,
@@ -225,8 +229,10 @@ impl Format {
     /// # Example
     ///
     /// ```
+    /// use wavepcm::Format;
+    ///
     /// fn main() -> Result<(), anyhow::Error> {
-    ///     let decoding = wavepcm::Format::decode("sample.wav")?;
+    ///     let decoding = Format::decode("sample.wav")?;
     ///     decoding.check()?;
     ///     Ok(())
     /// }

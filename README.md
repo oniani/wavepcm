@@ -1,6 +1,6 @@
 # wavepcm
 
-WAVE PCM file format encoder and decoder in pure Rust.
+Fast WAVE PCM file format encoder and decoder in pure Rust.
 
 ## API
 
@@ -13,11 +13,7 @@ fn main() -> Result<(), anyhow::Error> {
     let decoding = Format::decode("sample.wav")?;
     decoding.check()?;
 
-    let num_channels = u16::from_le_bytes(decoding.num_channels);
-    let sampling_rate = u32::from_le_bytes(decoding.sampling_rate);
-    let bits_per_sample = u16::from_be_bytes(decoding.bits_per_sample);
-
-    let encoding = Format::encode(decoding.data, num_channels, sampling_rate, bits_per_sample);
+    let encoding = Format::encode(decoding.data, 2, 44_100, 32);
     encoding.check()?;
 
     Ok(())
