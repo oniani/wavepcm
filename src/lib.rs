@@ -298,7 +298,7 @@ impl Format {
         let block_alignment = u16::from_le_bytes(self.block_alignment);
         assert!(
             block_alignment > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 34 - 34, got {} instead.",
+            "WAVE PCM format requires a number greater than 0 as bytes 33 - 34, got {} instead.",
             block_alignment
         );
 
