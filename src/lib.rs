@@ -7,7 +7,7 @@
 
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{prelude::Read, BufReader};
+use std::io::{prelude::Read, BufReader, BufWriter, Write};
 
 // Read 2 bytes from a reader.
 //
@@ -151,7 +151,7 @@ impl Format {
         })
     }
 
-    /// `decode` decode WAVE PCM file.
+    /// `decode` decodes WAVE PCM file.
     ///
     /// # Arguments
     ///
@@ -209,7 +209,7 @@ impl Format {
         })
     }
 
-    /// `check` checks if the read file complies with WAVE PCM format.
+    /// `check` checks if the WAVE PCM structure is properly-encoded.
     ///
     /// # Errors
     ///
@@ -261,19 +261,19 @@ impl Format {
             ));
         }
 
-        let fmt_chunk_size = u32::from_le_bytes(self.fmt_chunk_size);
-        if fmt_chunk_size != 16 {
+        let fmt_chunk_size_val = u32::from_le_bytes(self.fmt_chunk_size);
+        if fmt_chunk_size_val != 16 {
             return Err(anyhow::anyhow!(
                 "WAVE PCM format requires number 16 as bytes 17 - 20, got {} instead.",
-                fmt_chunk_size
+                fmt_chunk_size_val
             ));
         }
 
-        let fmt_code = u16::from_le_bytes(self.fmt_code);
-        if fmt_code != 1 {
+        let fmt_code_val = u16::from_le_bytes(self.fmt_code);
+        if fmt_code_val != 1 {
             return Err(anyhow::anyhow!(
                 "WAVE PCM format requires number 1 as bytes 21 - 22, got {} instead.",
-                fmt_code
+                fmt_code_val
             ));
         }
 
@@ -342,7 +342,7 @@ impl Format {
         Ok(())
     }
 
-    /// `info` prints the information about the properly-encoded WAVE PCM file.
+    /// `info` prints the information about the WAVE PCM file.
     ///
     /// # Errors
     ///
@@ -381,8 +381,6 @@ impl Format {
         let data_tag = std::string::String::from_utf8(self.data_tag.to_vec())?;
         let data_size = u32::from_le_bytes(self.data_size);
 
-        println!("THE WAVE PCM FORMAT HAS BEEN VALIDATED!\n");
-
         println!("RIFF TAG:           {:?}", riff_tag);
         println!("TOTAL SIZE:         {:?}", total_size);
         println!("WAVE TAG:           {:?}", wave_tag);
@@ -395,7 +393,52 @@ impl Format {
         println!("BLOCK ALIGNMENT:    {:?}", block_alignment);
         println!("BITS PER SAMPLE:    {:?}", bits_per_sample);
         println!("DATA TAG:           {:?}", data_tag);
-        println!("DATA SIZE:          {:?}", data_size);
+        println!("DATA SIZE:          {:?}\n", data_size);
+
+        Ok(())
+    }
+
+    /// `write` writes a WAVE PCM file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - A path to the WAV PCM file.
+    ///
+    /// # Errors
+    ///
+    /// This function will return the first error of
+    /// non-[`ErrorKind::Interrupted`](https://docs.rs/std/*/std/io/error/enum.ErrorKind.html) kind
+    /// that [`write`](https://docs.rs/std/*/std/io/trait.Write.html#tymethod.write) returns.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use wavepcm::Format;
+    ///
+    /// fn main() -> Result<(), anyhow::Error> {
+    ///     let decoding = Format::decode("sample.wav")?;
+    ///     decoding.write("sample_copy.wav");
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn write(&self, path: &str) -> Result<(), anyhow::Error> {
+        let file = File::create(path)?;
+        let mut bufw = BufWriter::new(file);
+
+        bufw.write_all(&self.riff_tag)?;
+        bufw.write_all(&self.total_size)?;
+        bufw.write_all(&self.wave_tag)?;
+        bufw.write_all(&self.fmt_chunk_tag)?;
+        bufw.write_all(&self.fmt_chunk_size)?;
+        bufw.write_all(&self.fmt_code)?;
+        bufw.write_all(&self.num_channels)?;
+        bufw.write_all(&self.sampling_rate)?;
+        bufw.write_all(&self.byte_rate)?;
+        bufw.write_all(&self.block_alignment)?;
+        bufw.write_all(&self.bits_per_sample)?;
+        bufw.write_all(&self.data_tag)?;
+        bufw.write_all(&self.data_size)?;
+        bufw.write_all(&self.data)?;
 
         Ok(())
     }

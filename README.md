@@ -17,6 +17,7 @@ fn main() -> Result<(), anyhow::Error> {
     let encoding = Format::encode(decoding.data, 2, 44_100, 32)?;
     encoding.check()?;
     encoding.info()?;
+    encoding.write("sample_new.wav")?;
 
     Ok(())
 }
