@@ -12,9 +12,11 @@ use wavepcm::Format;
 fn main() -> Result<(), anyhow::Error> {
     let decoding = Format::decode("sample.wav")?;
     decoding.check()?;
+    decoding.info()?;
 
-    let encoding = Format::encode(decoding.data, 2, 44_100, 32);
+    let encoding = Format::encode(decoding.data, 2, 44_100, 32)?;
     encoding.check()?;
+    encoding.info()?;
 
     Ok(())
 }

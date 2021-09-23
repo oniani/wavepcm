@@ -43,17 +43,17 @@ where
 //
 // * `reader` - A reader.
 //
-// # Panics
+// # Errors
 //
-// Can panic if the value cannot fit when performing type conversion.
-fn readn<T>(reader: T, nbytes: u32) -> Vec<u8>
+// If the value cannot fit when performing type conversion.
+fn readn<T>(reader: T, nbytes: u32) -> Result<Vec<u8>, anyhow::Error>
 where
     T: Read,
 {
-    let mut buf = Vec::with_capacity(nbytes.try_into().unwrap());
+    let mut buf = Vec::with_capacity(nbytes.try_into()?);
     let mut chunk = reader.take(u64::from(nbytes));
     let _val = chunk.read_to_end(&mut buf);
-    buf
+    Ok(buf)
 }
 
 /// WAVE PCM file format.
@@ -98,9 +98,9 @@ impl Format {
     /// * `sampling_rate` - Sampling rate in the audio data.
     /// * `bits_per_sample` - Bits per sample in the audio data.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Can panic if the value cannot fit when performing type conversion.
+    /// If the value cannot fit when performing type conversion.
     ///
     /// # Example
     ///
@@ -113,28 +113,27 @@ impl Format {
     /// let bits_per_sample = 16;
     /// let encoding = Format::encode(data, num_channels, sampling_rate, bits_per_sample);
     /// ```
-    #[must_use]
     pub fn encode(
         data: Vec<u8>,
         num_channels: u16,
         sampling_rate: u32,
         bits_per_sample: u16,
-    ) -> Self {
-        let size: u32 = data.len().try_into().unwrap();
+    ) -> Result<Self, anyhow::Error> {
+        let size: u32 = data.len().try_into()?;
 
-        let riff_tag = "RIFF".as_bytes().try_into().unwrap();
+        let riff_tag = "RIFF".as_bytes().try_into()?;
         let total_size = (size + 36).to_le_bytes();
-        let wave_tag = "WAVE".as_bytes().try_into().unwrap();
-        let fmt_chunk_tag = "fmt ".as_bytes().try_into().unwrap();
+        let wave_tag = "WAVE".as_bytes().try_into()?;
+        let fmt_chunk_tag = "fmt ".as_bytes().try_into()?;
         let fmt_chunk_size = 16_u32.to_le_bytes();
         let fmt_code = 1_u16.to_le_bytes();
         let byte_rate = (sampling_rate * u32::from(num_channels) * u32::from(bits_per_sample) / 8)
             .to_le_bytes();
         let block_alignment = (num_channels * bits_per_sample / 8).to_le_bytes();
-        let data_tag = "data".as_bytes().try_into().unwrap();
+        let data_tag = "data".as_bytes().try_into()?;
         let data_size = size.to_le_bytes();
 
-        Format {
+        Ok(Format {
             riff_tag,
             total_size,
             wave_tag,
@@ -149,7 +148,7 @@ impl Format {
             data_tag,
             data_size,
             data,
-        }
+        })
     }
 
     /// `decode` decode WAVE PCM file.
@@ -162,10 +161,6 @@ impl Format {
     ///
     /// This function will return an error if `path` does not already exist.
     /// Other errors may also be returned according to `OpenOptions::open`.
-    ///
-    /// # Panics
-    ///
-    /// Can panic if the value cannot fit when performing type conversion.
     ///
     /// # Example
     ///
@@ -194,7 +189,7 @@ impl Format {
         let bits_per_sample = read2(&mut bufr);
         let data_tag = read4(&mut bufr);
         let data_size = read4(&mut bufr);
-        let data = readn(&mut bufr, u32::from_le_bytes(data_size));
+        let data = readn(&mut bufr, u32::from_le_bytes(data_size))?;
 
         Ok(Format {
             riff_tag,
@@ -222,10 +217,6 @@ impl Format {
     /// UTF-8 with a description as to why the provided bytes are not UTF-8. The vector you moved
     /// in is also included.
     ///
-    /// # Panics
-    ///
-    /// Can panic if the value cannot fit when performing type conversion.
-    ///
     /// # Example
     ///
     /// ```
@@ -238,102 +229,157 @@ impl Format {
     /// }
     /// ```
     pub fn check(&self) -> Result<(), anyhow::Error> {
-        let riff_tag = std::string::String::from_utf8(self.riff_tag.to_vec())?;
-        assert_eq!(
-            riff_tag, "RIFF",
-            "WAVE PCM format requires string \"RIFF\" as bytes 1 - 4, got {} instead.",
-            riff_tag
-        );
+        let riff_tag_val = std::string::String::from_utf8(self.riff_tag.to_vec())?;
+        if riff_tag_val != "RIFF" {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires string \"RIFF\" as bytes 1 - 4, got {} instead.",
+                riff_tag_val
+            ));
+        }
 
-        let total_size = u32::from_le_bytes(self.total_size);
-        assert!(
-            total_size > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 5 - 8, got {} instead.",
-            total_size
-        );
+        let total_size_len = self.total_size.len();
+        if total_size_len != 4 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 4 bytes as bytes 5 - 8, got {} instead.",
+                total_size_len
+            ));
+        }
 
-        let wave_tag = std::string::String::from_utf8(self.wave_tag.to_vec())?;
-        assert_eq!(
-            wave_tag, "WAVE",
-            "WAVE PCM format requires string \"WAVE\" as bytes 9 - 12, got {} instead.",
-            wave_tag
-        );
+        let wave_tag_val = std::string::String::from_utf8(self.wave_tag.to_vec())?;
+        if wave_tag_val != "WAVE" {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires string \"WAVE\" as bytes 9 - 12, got {} instead.",
+                wave_tag_val
+            ));
+        }
 
-        let fmt_chunk_tag = std::string::String::from_utf8(self.fmt_chunk_tag.to_vec())?;
-        assert_eq!(
-            fmt_chunk_tag, "fmt ",
-            "WAVE PCM format requires string \"fmt \" as bytes 13 - 16, got {} instead.",
-            fmt_chunk_tag
-        );
+        let fmt_chunk_tag_val = std::string::String::from_utf8(self.fmt_chunk_tag.to_vec())?;
+        if fmt_chunk_tag_val != "fmt " {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires string \"fmt \" as bytes 13 - 16, got {} instead.",
+                fmt_chunk_tag_val
+            ));
+        }
 
         let fmt_chunk_size = u32::from_le_bytes(self.fmt_chunk_size);
-        assert_eq!(
-            fmt_chunk_size, 16,
-            "WAVE PCM format requires number 16 as bytes 17 - 20, got {} instead.",
-            fmt_chunk_size
-        );
+        if fmt_chunk_size != 16 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires number 16 as bytes 17 - 20, got {} instead.",
+                fmt_chunk_size
+            ));
+        }
 
         let fmt_code = u16::from_le_bytes(self.fmt_code);
-        assert_eq!(
-            fmt_code, 1,
-            "WAVE PCM format requires number 1 as bytes 21 - 22, got {} instead.",
-            fmt_code
-        );
+        if fmt_code != 1 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires number 1 as bytes 21 - 22, got {} instead.",
+                fmt_code
+            ));
+        }
 
+        let num_channels_len = self.num_channels.len();
+        if num_channels_len != 2 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 2 bytes as bytes 23 - 24, got {} instead.",
+                num_channels_len
+            ));
+        }
+
+        let sampling_rate_len = self.sampling_rate.len();
+        if sampling_rate_len != 4 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 4 bytes as bytes 25 - 28, got {} instead.",
+                sampling_rate_len
+            ));
+        }
+
+        let byte_rate_len = self.byte_rate.len();
+        if byte_rate_len != 4 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 4 bytes as bytes 29 - 32, got {} instead.",
+                byte_rate_len
+            ));
+        }
+
+        let block_alignment_len = self.block_alignment.len();
+        if block_alignment_len != 2 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 2 bytes as bytes 33 - 34, got {} instead.",
+                block_alignment_len
+            ));
+        }
+
+        let bits_per_sample_len = self.bits_per_sample.len();
+        if bits_per_sample_len != 2 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 2 bytes as bytes 35 - 36, got {} instead.",
+                bits_per_sample_len
+            ));
+        }
+
+        let data_tag_val = std::string::String::from_utf8(self.data_tag.to_vec())?;
+        if data_tag_val != "data" {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires string \"data\" as bytes 37 - 40, got {} instead.",
+                data_tag_val
+            ));
+        }
+
+        let data_size_len = self.data_size.len();
+        if data_size_len != 4 {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires 4 bytes as bytes 41 - 44, got {} instead.",
+                data_size_len
+            ));
+        }
+
+        if self.data.is_empty() {
+            return Err(anyhow::anyhow!(
+                "WAVE PCM format requires at least one bytes as bytes 45 - EOF, got 0 instead."
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// `info` prints the information about the properly-encoded WAVE PCM file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Err`](https://docs.rs/core/*/core/result/enum.Result.html) if the slice is not
+    /// UTF-8 with a description as to why the provided bytes are not UTF-8. The vector you moved
+    /// in is also included.
+    ///
+    /// # Errors
+    ///
+    /// If the value cannot fit when performing type conversion.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use wavepcm::Format;
+    ///
+    /// fn main() -> Result<(), anyhow::Error> {
+    ///     let decoding = Format::decode("sample.wav")?;
+    ///     decoding.check()?;
+    ///     decoding.info()?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn info(&self) -> Result<(), anyhow::Error> {
+        let riff_tag = std::string::String::from_utf8(self.riff_tag.to_vec())?;
+        let total_size = u32::from_le_bytes(self.total_size);
+        let wave_tag = std::string::String::from_utf8(self.wave_tag.to_vec())?;
+        let fmt_chunk_tag = std::string::String::from_utf8(self.fmt_chunk_tag.to_vec())?;
+        let fmt_chunk_size = u32::from_le_bytes(self.fmt_chunk_size);
+        let fmt_code = u16::from_le_bytes(self.fmt_code);
         let num_channels = u16::from_le_bytes(self.num_channels);
-        assert!(
-            num_channels > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 23 - 24, got {} instead.",
-            num_channels
-        );
-
         let sampling_rate = u32::from_le_bytes(self.sampling_rate);
-        assert!(
-            sampling_rate > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 25 - 28, got {} instead.",
-            sampling_rate
-        );
-
         let byte_rate = u32::from_le_bytes(self.byte_rate);
-        assert!(
-            byte_rate > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 29 - 32, got {} instead.",
-            byte_rate
-        );
-
         let block_alignment = u16::from_le_bytes(self.block_alignment);
-        assert!(
-            block_alignment > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 33 - 34, got {} instead.",
-            block_alignment
-        );
-
         let bits_per_sample = u16::from_le_bytes(self.bits_per_sample);
-        assert!(
-            bits_per_sample > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 35 - 36, got {} instead.",
-            bits_per_sample
-        );
-
         let data_tag = std::string::String::from_utf8(self.data_tag.to_vec())?;
-        assert_eq!(
-            data_tag, "data",
-            "WAVE PCM format requires string \"data\" as bytes 37 - 40, got {} instead.",
-            data_tag
-        );
-
         let data_size = u32::from_le_bytes(self.data_size);
-        assert!(
-            data_size > 0,
-            "WAVE PCM format requires a number greater than 0 as bytes 41 - 44, got {} instead.",
-            data_size
-        );
-
-        assert!(
-            !self.data.is_empty(),
-            "WAVE PCM format requires a number greater than 0 as bytes 45 - , got {} instead.",
-            self.data.len()
-        );
 
         println!("THE WAVE PCM FORMAT HAS BEEN VALIDATED!\n");
 
